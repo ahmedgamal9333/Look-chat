@@ -6,7 +6,9 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
-    "prebuild": "expo prebuild"
+    "prebuild": "expo prebuild",
+    "web": "expo start --web",
+    "test": "node --experimental-default-type=module --test"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -15,7 +17,10 @@
     "expo-location": "*",
     "react": "19.3.0",
     "react-native": "0.88.0",
-    "react-native-url-polyfill": "^2.0.0"
+    "react-native-url-polyfill": "^2.0.0",
+    "@expo/metro-runtime": "*",
+    "react-dom": "19.3.0",
+    "react-native-web": "*"
   },
   "devDependencies": {}
 }
