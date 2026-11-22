@@ -22,3 +22,15 @@ test('nearby map omits people without approximate coordinates', () => {
   });
   assert.doesNotMatch(html, /بدون إحداثيات/);
 });
+
+
+test('map photo pins include avatar and chat action safely', () => {
+  const html = createMapHtml({
+    currentLocation: { latitude: 30, longitude: 31 },
+    people: [{ user_id: 'user-123', display_name: 'صديق', avatar_url: 'https://example.com/photo.jpg', bio: 'أحب السفر', distance_m: 700, map_lat: 30.01, map_lon: 31.01 }]
+  });
+  assert.match(html, /user-pin/);
+  assert.match(html, /https:\\/\\/example.com\\/photo.jpg/);
+  assert.match(html, /data-open-user/);
+  assert.match(html, /ابدأ محادثة/);
+});
