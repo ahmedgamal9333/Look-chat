@@ -21,7 +21,8 @@
     "@expo/metro-runtime": "*",
     "react-dom": "19.3.0",
     "react-native-web": "*",
-    "react-native-webview": "*"
+    "react-native-webview": "*",
+    "@react-native-community/slider": "*"
   },
   "devDependencies": {}
 }
