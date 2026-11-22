@@ -22,7 +22,8 @@
     "react-dom": "19.3.0",
     "react-native-web": "*",
     "react-native-webview": "*",
-    "@react-native-community/slider": "*"
+    "@react-native-community/slider": "*",
+    "expo-image-picker": "*"
   },
   "devDependencies": {}
 }
