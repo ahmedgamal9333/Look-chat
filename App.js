@@ -53,6 +53,19 @@ export default function App() {
 
   useEffect(() => { if (session) loadProfile(); }, [session]);
 
+  useEffect(() => {
+    if (!supabase || !session || !visible) return;
+    async function refreshLivePeople() {
+      const { error: heartbeatError } = await supabase.rpc('refresh_my_presence');
+      if (heartbeatError) return;
+      const { data, error } = await supabase.rpc('nearby_people', { radius_m: radius * 1000 });
+      if (!error) setPeople(data || []);
+    }
+    refreshLivePeople();
+    const timer = setInterval(refreshLivePeople, 60000);
+    return () => clearInterval(timer);
+  }, [session, visible, radius]);
+
   async function readCurrentCoordinates() {
     try {
       return await getCurrentCoordinates({ platform: Platform.OS, locationApi: Location });
