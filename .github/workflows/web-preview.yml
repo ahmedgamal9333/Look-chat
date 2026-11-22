@@ -30,7 +30,7 @@ jobs:
         run: npm install
 
       - name: Install Expo-compatible web packages
-        run: npx expo install react-dom react-native-web @expo/metro-runtime
+        run: npx expo install react-dom react-native-web @expo/metro-runtime @react-native-community/slider react-native-webview
 
       - name: Run location tests
         run: npm test
