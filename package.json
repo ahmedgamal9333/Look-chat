@@ -20,7 +20,9 @@
     "react-native-url-polyfill": "^2.0.0",
     "@expo/metro-runtime": "*",
     "react-dom": "19.3.0",
-    "react-native-web": "*"
+    "react-native-web": "*",
+    "@react-native-community/slider": "*",
+    "react-native-webview": "*"
   },
   "devDependencies": {}
 }
