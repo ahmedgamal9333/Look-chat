@@ -17,7 +17,7 @@ export function createMapHtml({ currentLocation, people = [], radiusKm = 10 }) {
 </style></head><body><div id="map"></div><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
 const data = ${payload};
 const escapeHtml=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const safeImage=value=>/^https?:\\/\\//i.test(value)?escapeHtml(value):'';
+const safeImage=value=>(value.startsWith('https://')||value.startsWith('http://'))?escapeHtml(value):'';
 const fallback=[26.8206,30.8025];const center=data.currentLocation?[data.currentLocation.latitude,data.currentLocation.longitude]:fallback;
 const map=L.map('map',{zoomControl:true,scrollWheelZoom:true}).setView(center,data.currentLocation?12:5);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OpenStreetMap © CARTO'}).addTo(map);
@@ -37,7 +37,7 @@ if(data.currentLocation){
  });
  map.fitBounds(bounds,{padding:[35,35],maxZoom:15});
 }else{L.marker(fallback).addTo(map).bindPopup('اسمح بالوصول إلى موقعك ثم اضغط «ابحث عن القريبين»');}
-document.addEventListener('click',event=>{const button=event.target.closest('[data-open-user]');if(!button)return;const person=data.people.find(item=>item.userId===button.getAttribute('data-open-user'));if(person)parent.postMessage({type:'lookchat-open-user',person},'*');});
+document.addEventListener('click',event=>{const button=event.target.closest('[data-open-user]');if(!button)return;const person=data.people.find(item=>item.userId===button.getAttribute('data-open-user'));if(person){const message=JSON.stringify({type:'lookchat-open-user',person});if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(message);else parent.postMessage(JSON.parse(message),'*');}});
 setTimeout(()=>map.invalidateSize(),250);
 </script></body></html>`;
 }
