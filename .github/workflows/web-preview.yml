@@ -1,0 +1,61 @@
+name: Build and deploy LookChat web preview
+
+on:
+  push:
+    branches:
+      - feature/web-preview
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lookchat-web-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Expo-compatible web packages
+        run: npx expo install react-dom react-native-web @expo/metro-runtime
+
+      - name: Run location tests
+        run: npm test
+
+      - name: Export static website
+        run: npx expo export --platform web
+
+      - name: Upload website artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy website
+        id: deployment
+        uses: actions/deploy-pages@v4
