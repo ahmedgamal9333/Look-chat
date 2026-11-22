@@ -16,7 +16,7 @@ const palette = { ink:'#17212B', muted:'#74808C', brand:'#087F72', bg:'#F4F7F8',
 
 function showAlert(title, message) {
   if (Platform.OS === 'web' && typeof globalThis.alert === 'function') {
-    globalThis.alert(`${title}\\n${message}`);
+    globalThis.alert(`${title}\n${message}`);
     return;
   }
   Alert.alert(title, message);
