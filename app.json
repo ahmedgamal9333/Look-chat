@@ -27,6 +27,13 @@
         }
       ]
     ],
-    "extra": {}
+    "extra": {},
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "experiments": {
+      "baseUrl": "/Look-chat"
+    }
   }
 }
