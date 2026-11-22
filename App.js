@@ -1,0 +1,111 @@
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
+import { createClient } from '@supabase/supabase-js';
+import 'react-native-url-polyfill/auto';
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { storage: AsyncStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false }
+}) : null;
+
+const palette = { ink:'#17212B', muted:'#74808C', brand:'#087F72', bg:'#F4F7F8', card:'#FFFFFF', line:'#E5EBED', soft:'#E5F4F1', danger:'#B42318' };
+
+export default function App() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [visible, setVisible] = useState(false);
+  const [radius, setRadius] = useState(10);
+  const [people, setPeople] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState('nearby');
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false); });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => { if (session) loadProfile(); }, [session]);
+
+  async function loadProfile() {
+    if (!supabase || !session?.user) return;
+    const { data } = await supabase.from('profiles').select('display_name,is_visible').eq('id', session.user.id).maybeSingle();
+    if (data) { setDisplayName(data.display_name || ''); setVisible(!!data.is_visible); }
+  }
+
+  async function authenticate(createAccount) {
+    if (!supabase) return Alert.alert('إعداد مطلوب', 'يلزم إضافة مفتاح Supabase Publishable إلى إعدادات البناء.');
+    if (!email.trim() || password.length < 6) return Alert.alert('راجع البيانات', 'اكتب البريد الإلكتروني وكلمة مرور من 6 أحرف على الأقل.');
+    setBusy(true);
+    const result = createAccount
+      ? await supabase.auth.signUp({ email: email.trim(), password })
+      : await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    setBusy(false);
+    if (result.error) return Alert.alert('تعذر تسجيل الدخول', result.error.message);
+    if (createAccount && !result.data.session) Alert.alert('تحقق من بريدك', 'أرسلنا رسالة تأكيد إلى بريدك الإلكتروني.');
+  }
+
+  async function savePresence(nextVisible = visible) {
+    if (!supabase || !session) return;
+    if (!displayName.trim()) return Alert.alert('الاسم مطلوب', 'اكتب الاسم الذي سيظهر للآخرين.');
+    setBusy(true);
+    let lat = null, lon = null;
+    if (nextVisible) {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== 'granted') {
+        setBusy(false);
+        return Alert.alert('الموقع غير مسموح', 'اسمح بالوصول للموقع حتى تظهر للأشخاص القريبين.');
+      }
+      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      lat = position.coords.latitude; lon = position.coords.longitude;
+    }
+    const { error } = await supabase.rpc('set_my_presence', {
+      p_display_name: displayName.trim(), p_is_visible: nextVisible, p_latitude: lat, p_longitude: lon
+    });
+    setBusy(false);
+    if (error) return Alert.alert('تعذر حفظ الحالة', error.message);
+    setVisible(nextVisible);
+    if (nextVisible) findNearby();
+    else setPeople([]);
+  }
+
+  async function findNearby() {
+    if (!supabase || !session) return;
+    setBusy(true);
+    const permission = await Location.requestForegroundPermissionsAsync();
+    if (permission.status !== 'granted') { setBusy(false); return Alert.alert('الموقع مطلوب', 'اسمح بالموقع للبحث عن الأشخاص القريبين.'); }
+    const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    const { data, error } = await supabase.rpc('nearby_people', {
+      p_latitude: position.coords.latitude, p_longitude: position.coords.longitude, p_radius_m: radius * 1000
+    });
+    setBusy(false);
+    if (error) return Alert.alert('تعذر تحميل الأشخاص', error.message);
+    setPeople(data || []);
+  }
+
+  async function signOut() { await supabase?.auth.signOut(); setPeople([]); setVisible(false); }
+
+  if (loading) return <SafeAreaView style={styles.center}><ActivityIndicator size="large" color={palette.brand} /></SafeAreaView>;
+  if (!supabase) return <SafeAreaView style={styles.page}><View style={styles.header}><Text style={styles.logo}>LookChat</Text></View><View style={styles.panel}><Text style={styles.heading}>التطبيق يحتاج إعداد الاتصال</Text><Text style={styles.body}>تم تجهيز المشروع. يلزم ضبط متغيري Supabase في إعدادات GitHub Actions قبل تشغيل تسجيل الدخول والبيانات.</Text></View></SafeAreaView>;
+  if (!session) return <SafeAreaView style={styles.page}><StatusBar barStyle="dark-content" /><KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.authWrap}><View style={styles.brandMark}><Text style={styles.brandMarkText}>L</Text></View><Text style={styles.logo}>LookChat</Text><Text style={styles.subtitle}>قريبون منك، عندما تختار الظهور</Text><View style={styles.panel}><Text style={styles.heading}>أهلاً بيك</Text><Text style={styles.label}>البريد الإلكتروني</Text><TextInput value={email} onChangeText={setEmail} placeholder="name@example.com" autoCapitalize="none" keyboardType="email-address" style={styles.input} /><Text style={styles.label}>كلمة المرور</Text><TextInput value={password} onChangeText={setPassword} placeholder="6 أحرف على الأقل" secureTextEntry style={styles.input} /><TouchableOpacity disabled={busy} style={styles.primary} onPress={() => authenticate(false)}><Text style={styles.primaryText}>{busy ? 'جارٍ التنفيذ...' : 'تسجيل الدخول'}</Text></TouchableOpacity><TouchableOpacity disabled={busy} style={styles.secondary} onPress={() => authenticate(true)}><Text style={styles.secondaryText}>إنشاء حساب جديد</Text></TouchableOpacity></View></KeyboardAvoidingView></SafeAreaView>;
+
+  return <SafeAreaView style={styles.page}><StatusBar barStyle="dark-content" /><View style={styles.topbar}><View><Text style={styles.logo}>LookChat</Text><Text style={styles.topHint}>اكتشف من حولك بأمان</Text></View><TouchableOpacity onPress={() => setTab(tab === 'settings' ? 'nearby' : 'settings')} style={styles.avatar}><Text style={styles.avatarText}>{(displayName || 'L').slice(0,1).toUpperCase()}</Text></TouchableOpacity></View>
+    {tab === 'settings' ? <ScrollView contentContainerStyle={styles.content}><View style={styles.panel}><Text style={styles.heading}>إعدادات الحساب</Text><Text style={styles.label}>الاسم الظاهر</Text><TextInput value={displayName} onChangeText={setDisplayName} placeholder="اكتب اسمك" style={styles.input} /><Text style={styles.body}>الظهور اختياري. عند إيقافه لن يظهر حسابك في نتائج البحث.</Text><TouchableOpacity disabled={busy} style={styles.primary} onPress={() => savePresence(visible)}><Text style={styles.primaryText}>حفظ الاسم</Text></TouchableOpacity><TouchableOpacity style={styles.secondary} onPress={signOut}><Text style={styles.secondaryText}>تسجيل الخروج</Text></TouchableOpacity></View></ScrollView>
+    : <ScrollView contentContainerStyle={styles.content}><View style={styles.hero}><Text style={styles.heroTitle}>أشخاص قريبون منك</Text><Text style={styles.heroText}>موقعك لا يظهر للآخرين؛ نعرض المسافة التقريبية فقط.</Text><View style={styles.rangeRow}><Text style={styles.label}>نطاق البحث</Text><View style={styles.rangeButtons}>{[1,5,10,25,50,100,500].map(n => <TouchableOpacity key={n} onPress={() => setRadius(n)} style={[styles.rangeChip, radius===n && styles.rangeActive]}><Text style={[styles.rangeText, radius===n && styles.rangeTextActive]}>{n}</Text></TouchableOpacity>)}</View><Text style={styles.small}>كيلومتر</Text></View><TouchableOpacity disabled={busy} style={styles.primary} onPress={findNearby}><Text style={styles.primaryText}>{busy ? 'جارٍ البحث...' : 'ابحث عن القريبين'}</Text></TouchableOpacity></View>
+      <View style={styles.presence}><View style={{flex:1}}><Text style={styles.presenceTitle}>{visible ? 'أنت ظاهر الآن' : 'أنت غير ظاهر'}</Text><Text style={styles.small}>{visible ? 'يمكن للأشخاص القريبين العثور عليك.' : 'فعّل الظهور حتى يراك الآخرون.'}</Text></View><TouchableOpacity style={[styles.toggle, visible && styles.toggleOn]} onPress={() => savePresence(!visible)}><Text style={styles.toggleText}>{visible ? 'إيقاف' : 'ظهور'}</Text></TouchableOpacity></View>
+      <Text style={styles.sectionTitle}>الأشخاص المتاحون ({people.length})</Text>{people.length === 0 ? <View style={styles.empty}><Text style={styles.emptyIcon}>⌖</Text><Text style={styles.emptyTitle}>لا توجد نتائج حتى الآن</Text><Text style={styles.small}>اضغط «ابحث عن القريبين» بعد السماح بالموقع.</Text></View> : <FlatList scrollEnabled={false} data={people} keyExtractor={item => item.user_id} renderItem={({item}) => <View style={styles.person}><View style={styles.personAvatar}><Text style={styles.personInitial}>{(item.display_name || '?').slice(0,1)}</Text></View><View style={{flex:1}}><Text style={styles.personName}>{item.display_name}</Text><Text style={styles.small}>{item.distance_m < 1000 ? 'على بُعد ' + item.distance_m + ' متر' : 'على بُعد ' + (item.distance_m/1000).toFixed(1) + ' كم'}</Text></View><Text style={styles.online}>●</Text></View>} />}
+    </ScrollView>}
+    <View style={styles.bottom}><TouchableOpacity onPress={() => setTab('nearby')}><Text style={[styles.bottomItem,tab==='nearby' && styles.bottomActive]}>القريبون</Text></TouchableOpacity><TouchableOpacity onPress={() => setTab('settings')}><Text style={[styles.bottomItem,tab==='settings' && styles.bottomActive]}>حسابي</Text></TouchableOpacity></View>
+  </SafeAreaView>;
+}
+
+const styles = StyleSheet.create({
+ page:{flex:1,backgroundColor:palette.bg},center:{flex:1,alignItems:'center',justifyContent:'center',backgroundColor:palette.bg},authWrap:{flex:1,justifyContent:'center',padding:24},brandMark:{width:58,height:58,borderRadius:20,backgroundColor:palette.brand,alignItems:'center',justifyContent:'center',alignSelf:'center',marginBottom:12},brandMarkText:{fontSize:30,fontWeight:'800',color:'#fff'},logo:{fontSize:28,fontWeight:'800',color:palette.ink,textAlign:'center'},subtitle:{color:palette.muted,textAlign:'center',marginTop:6,marginBottom:28},panel:{backgroundColor:palette.card,borderRadius:22,padding:20,borderWidth:1,borderColor:palette.line},heading:{fontSize:21,fontWeight:'800',color:palette.ink,marginBottom:16,textAlign:'right'},label:{fontSize:13,fontWeight:'700',color:palette.ink,marginBottom:8,textAlign:'right'},input:{backgroundColor:'#F8FAFB',borderColor:palette.line,borderWidth:1,borderRadius:12,paddingHorizontal:14,paddingVertical:13,marginBottom:16,textAlign:'right',color:palette.ink},primary:{backgroundColor:palette.brand,padding:15,borderRadius:13,alignItems:'center',marginTop:8},primaryText:{color:'#fff',fontWeight:'800',fontSize:15},secondary:{padding:14,alignItems:'center',marginTop:5},secondaryText:{color:palette.brand,fontWeight:'800'},body:{color:palette.muted,lineHeight:22,textAlign:'right',marginBottom:12},topbar:{paddingHorizontal:20,paddingVertical:15,flexDirection:'row-reverse',alignItems:'center',justifyContent:'space-between',backgroundColor:palette.card},topHint:{color:palette.muted,textAlign:'right',fontSize:12,marginTop:3},avatar:{width:44,height:44,borderRadius:16,backgroundColor:palette.soft,alignItems:'center',justifyContent:'center'},avatarText:{color:palette.brand,fontSize:18,fontWeight:'800'},content:{padding:16,paddingBottom:24},hero:{backgroundColor:palette.card,borderRadius:22,padding:18,borderWidth:1,borderColor:palette.line},heroTitle:{fontSize:22,fontWeight:'800',color:palette.ink,textAlign:'right'},heroText:{color:palette.muted,textAlign:'right',lineHeight:21,marginTop:6,marginBottom:16},rangeRow:{marginBottom:8},rangeButtons:{flexDirection:'row-reverse',flexWrap:'wrap',gap:7,marginBottom:6},rangeChip:{paddingHorizontal:13,paddingVertical:9,borderRadius:10,backgroundColor:'#F0F4F5'},rangeActive:{backgroundColor:palette.soft,borderWidth:1,borderColor:palette.brand},rangeText:{color:palette.ink,fontWeight:'700'},rangeTextActive:{color:palette.brand},small:{fontSize:12,color:palette.muted,textAlign:'right'},presence:{marginTop:14,backgroundColor:palette.soft,borderRadius:16,padding:15,flexDirection:'row-reverse',alignItems:'center'},presenceTitle:{fontWeight:'800',color:palette.ink,textAlign:'right',marginBottom:4},toggle:{backgroundColor:'#DCE5E7',paddingHorizontal:16,paddingVertical:10,borderRadius:10},toggleOn:{backgroundColor:palette.brand},toggleText:{fontWeight:'800',color:palette.ink},sectionTitle:{fontSize:18,fontWeight:'800',color:palette.ink,textAlign:'right',marginTop:22,marginBottom:12},empty:{backgroundColor:palette.card,borderRadius:18,padding:25,alignItems:'center'},emptyIcon:{fontSize:38,color:palette.brand},emptyTitle:{fontWeight:'800',fontSize:16,color:palette.ink,marginTop:8,marginBottom:5},person:{backgroundColor:palette.card,padding:14,borderRadius:15,marginBottom:9,flexDirection:'row-reverse',alignItems:'center',gap:12},personAvatar:{width:44,height:44,borderRadius:15,backgroundColor:palette.soft,alignItems:'center',justifyContent:'center'},personInitial:{fontWeight:'800',fontSize:18,color:palette.brand},personName:{fontWeight:'800',color:palette.ink,textAlign:'right',marginBottom:4},online:{color:palette.brand},bottom:{height:60,backgroundColor:palette.card,borderTopWidth:1,borderColor:palette.line,flexDirection:'row-reverse',alignItems:'center',justifyContent:'space-around'},bottomItem:{color:palette.muted,fontWeight:'700',padding:12},bottomActive:{color:palette.brand}
+});
