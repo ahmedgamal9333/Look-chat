@@ -138,12 +138,15 @@ export default function App() {
 
   async function uploadAvatar(file) {
     if (!file || !session?.user) return;
-    if (!['image/jpeg','image/png','image/webp'].includes(file.type)) return showAlert('صيغة غير مدعومة', 'اختر صورة JPG أو PNG أو WEBP.');
-    if (file.size > 3 * 1024 * 1024) return showAlert('الصورة كبيرة', 'اختر صورة حجمها 3 ميجابايت أو أقل.');
+    const mimeType = file.type || file.mimeType || 'image/jpeg';
+    const fileSize = file.size || file.fileSize || 0;
+    if (!['image/jpeg','image/png','image/webp'].includes(mimeType)) return showAlert('صيغة غير مدعومة', 'اختر صورة JPG أو PNG أو WEBP.');
+    if (fileSize > 3 * 1024 * 1024) return showAlert('الصورة كبيرة', 'اختر صورة حجمها 3 ميجابايت أو أقل.');
     setBusy(true);
-    const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+    const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
     const path = session.user.id + '/' + Date.now() + '.' + extension;
-    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { contentType: file.type, upsert: true });
+    const uploadBody = Platform.OS === 'web' ? file : await (await fetch(file.uri)).arrayBuffer();
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, uploadBody, { contentType: mimeType, upsert: true });
     if (uploadError) { setBusy(false); return showAlert('تعذر رفع الصورة', uploadError.message); }
     const { data } = supabase.storage.from('avatars').getPublicUrl(path);
     const { error: profileError } = await supabase.from('profiles').upsert({ id: session.user.id, display_name: displayName.trim() || 'مستخدم LookChat', bio: profileBio.trim(), avatar_url: data.publicUrl, updated_at: new Date().toISOString() }, { onConflict: 'id' });
