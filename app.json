@@ -30,7 +30,7 @@
     "extra": {},
     "web": {
       "bundler": "metro",
-      "output": "static"
+      "output": "single"
     },
     "experiments": {
       "baseUrl": "/Look-chat"
