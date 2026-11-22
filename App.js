@@ -7,6 +7,7 @@ import 'react-native-url-polyfill/auto';
 import { getCurrentCoordinates } from './src/location';
 import RadiusSlider from './src/components/RadiusSlider';
 import NearbyMap from './src/components/NearbyMap';
+import AvatarPicker from './src/components/AvatarPicker';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://uinorprelciuqgfzeblg.supabase.co';
 const SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_i-rHjp3ZJ9iQqI-ZI39lVA_4U-4ahBn';
@@ -30,6 +31,8 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [profileBio, setProfileBio] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const [visible, setVisible] = useState(false);
   const [radius, setRadius] = useState(10);
   const [people, setPeople] = useState([]);
@@ -65,9 +68,11 @@ export default function App() {
 
   async function loadProfile() {
     if (!supabase || !session?.user) return;
-    const { data: profile } = await supabase.from('profiles').select('display_name').eq('id', session.user.id).maybeSingle();
+    const { data: profile } = await supabase.from('profiles').select('display_name,bio,avatar_url').eq('id', session.user.id).maybeSingle();
     const { data: presence } = await supabase.from('location_presence').select('is_visible').eq('user_id', session.user.id).maybeSingle();
     setDisplayName(profile?.display_name || '');
+    setProfileBio(profile?.bio || '');
+    setAvatarUrl(profile?.avatar_url || '');
     setVisible(!!presence?.is_visible);
   }
 
@@ -96,7 +101,7 @@ export default function App() {
     }
     const { error: presenceError } = await supabase.rpc('set_my_presence', { lat, lon, visible: nextVisible });
     if (presenceError) { setBusy(false); return showAlert('تعذر حفظ حالة الظهور', presenceError.message); }
-    const { error: profileError } = await supabase.from('profiles').upsert({ id: session.user.id, display_name: displayName.trim() }, { onConflict: 'id' });
+    const { error: profileError } = await supabase.from('profiles').upsert({ id: session.user.id, display_name: displayName.trim(), bio: profileBio.trim(), avatar_url: avatarUrl || null, updated_at: new Date().toISOString() }, { onConflict: 'id' });
     setBusy(false);
     if (profileError) return showAlert('تعذر حفظ الاسم', profileError.message);
     setVisible(nextVisible);
@@ -116,6 +121,23 @@ export default function App() {
     setBusy(false);
     if (error) return showAlert('تعذر تحميل الأشخاص', error.message);
     setPeople(data || []);
+  }
+
+  async function uploadAvatar(file) {
+    if (!file || !session?.user) return;
+    if (!['image/jpeg','image/png','image/webp'].includes(file.type)) return showAlert('صيغة غير مدعومة', 'اختر صورة JPG أو PNG أو WEBP.');
+    if (file.size > 3 * 1024 * 1024) return showAlert('الصورة كبيرة', 'اختر صورة حجمها 3 ميجابايت أو أقل.');
+    setBusy(true);
+    const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+    const path = session.user.id + '/' + Date.now() + '.' + extension;
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, file, { contentType: file.type, upsert: true });
+    if (uploadError) { setBusy(false); return showAlert('تعذر رفع الصورة', uploadError.message); }
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+    const { error: profileError } = await supabase.from('profiles').upsert({ id: session.user.id, display_name: displayName.trim() || 'مستخدم LookChat', bio: profileBio.trim(), avatar_url: data.publicUrl, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+    setBusy(false);
+    if (profileError) return showAlert('تعذر حفظ الصورة بالحساب', profileError.message);
+    setAvatarUrl(data.publicUrl);
+    showAlert('تم تحديث الصورة', 'صورتك الشخصية أصبحت محدثة.');
   }
 
   async function openChat(person) {
@@ -156,9 +178,9 @@ export default function App() {
   if (!session) return <SafeAreaView style={styles.page}><StatusBar barStyle="dark-content" /><KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.authWrap}><View style={styles.brandMark}><Text style={styles.brandMarkText}>L</Text></View><Text style={styles.logo}>LookChat</Text><Text style={styles.subtitle}>قريبون منك، عندما تختار الظهور</Text><View style={styles.panel}><Text style={styles.heading}>أهلاً بيك</Text><Text style={styles.label}>البريد الإلكتروني</Text><TextInput value={email} onChangeText={setEmail} placeholder="name@example.com" autoCapitalize="none" keyboardType="email-address" style={styles.input} /><Text style={styles.label}>كلمة المرور</Text><TextInput value={password} onChangeText={setPassword} placeholder="6 أحرف على الأقل" secureTextEntry style={styles.input} /><TouchableOpacity disabled={busy} style={styles.primary} onPress={() => authenticate(false)}><Text style={styles.primaryText}>{busy ? 'جارٍ التنفيذ...' : 'تسجيل الدخول'}</Text></TouchableOpacity><TouchableOpacity disabled={busy} style={styles.secondary} onPress={() => authenticate(true)}><Text style={styles.secondaryText}>إنشاء حساب جديد</Text></TouchableOpacity></View></KeyboardAvoidingView></SafeAreaView>;
 
   return <SafeAreaView style={styles.page}><StatusBar barStyle="dark-content" /><View style={styles.topbar}><View><Text style={styles.logo}>LookChat</Text><Text style={styles.topHint}>اكتشف من حولك بأمان</Text></View><TouchableOpacity onPress={() => setTab(tab === 'settings' ? 'nearby' : 'settings')} style={styles.avatar}><Text style={styles.avatarText}>{(displayName || 'L').slice(0,1).toUpperCase()}</Text></TouchableOpacity></View>
-    {tab === 'chat' && chatId ? <View style={styles.chatWrap}><View style={styles.chatHeader}><TouchableOpacity onPress={() => { setTab('nearby'); setChatId(null); setChatPartner(null); }}><Text style={styles.chatBack}>رجوع</Text></TouchableOpacity><Text style={styles.chatTitle}>{chatPartner?.display_name || 'محادثة'}</Text><TouchableOpacity onPress={() => loadChatMessages(chatId)}><Text style={styles.chatBack}>تحديث</Text></TouchableOpacity></View><FlatList style={styles.chatList} data={chatMessages} keyExtractor={item => item.id} renderItem={({item}) => <View style={[styles.bubble, item.sender_id === session.user.id ? styles.myBubble : styles.theirBubble]}><Text style={[styles.bubbleText, item.sender_id === session.user.id && styles.myBubbleText]}>{item.body}</Text></View>} ListEmptyComponent={<Text style={styles.small}>ابدأ المحادثة برسالة ترحيب.</Text>} /><View style={styles.composer}><TextInput value={draft} onChangeText={setDraft} placeholder='اكتب رسالتك...' style={styles.messageInput} multiline /><TouchableOpacity disabled={busy || !draft.trim()} onPress={sendMessage} style={styles.sendButton}><Text style={styles.sendText}>إرسال</Text></TouchableOpacity></View></View> : tab === 'settings' ? <ScrollView contentContainerStyle={styles.content}><View style={styles.panel}><Text style={styles.heading}>إعدادات الحساب</Text><Text style={styles.label}>الاسم الظاهر</Text><TextInput value={displayName} onChangeText={setDisplayName} placeholder="اكتب اسمك" style={styles.input} /><Text style={styles.body}>الظهور اختياري. عند إيقافه لن يظهر حسابك في نتائج البحث.</Text><TouchableOpacity disabled={busy} style={styles.primary} onPress={() => savePresence(visible)}><Text style={styles.primaryText}>حفظ الاسم</Text></TouchableOpacity><TouchableOpacity style={styles.secondary} onPress={signOut}><Text style={styles.secondaryText}>تسجيل الخروج</Text></TouchableOpacity></View></ScrollView>
+    {tab === 'chat' && chatId ? <View style={styles.chatWrap}><View style={styles.chatHeader}><TouchableOpacity onPress={() => { setTab('nearby'); setChatId(null); setChatPartner(null); }}><Text style={styles.chatBack}>رجوع</Text></TouchableOpacity><Text style={styles.chatTitle}>{chatPartner?.display_name || 'محادثة'}</Text><TouchableOpacity onPress={() => loadChatMessages(chatId)}><Text style={styles.chatBack}>تحديث</Text></TouchableOpacity></View><FlatList style={styles.chatList} data={chatMessages} keyExtractor={item => item.id} renderItem={({item}) => <View style={[styles.bubble, item.sender_id === session.user.id ? styles.myBubble : styles.theirBubble]}><Text style={[styles.bubbleText, item.sender_id === session.user.id && styles.myBubbleText]}>{item.body}</Text></View>} ListEmptyComponent={<Text style={styles.small}>ابدأ المحادثة برسالة ترحيب.</Text>} /><View style={styles.composer}><TextInput value={draft} onChangeText={setDraft} placeholder='اكتب رسالتك...' style={styles.messageInput} multiline /><TouchableOpacity disabled={busy || !draft.trim()} onPress={sendMessage} style={styles.sendButton}><Text style={styles.sendText}>إرسال</Text></TouchableOpacity></View></View> : tab === 'settings' ? <ScrollView contentContainerStyle={styles.content}><View style={styles.panel}><Text style={styles.heading}>ملفي الشخصي</Text><AvatarPicker avatarUrl={avatarUrl} onSelect={uploadAvatar} disabled={busy} /><Text style={styles.label}>الاسم الظاهر</Text><TextInput value={displayName} onChangeText={setDisplayName} placeholder="اكتب اسمك" maxLength={40} style={styles.input} /><Text style={styles.label}>نبذة عنك</Text><TextInput value={profileBio} onChangeText={setProfileBio} placeholder="اكتب نبذة بسيطة عن نفسك..." maxLength={240} multiline style={[styles.input,{minHeight:100,textAlignVertical:"top"}]} /><Text style={styles.body}>الظهور اختياري. عند إيقافه لن يظهر حسابك في نتائج البحث.</Text><TouchableOpacity disabled={busy} style={styles.primary} onPress={() => savePresence(visible)}><Text style={styles.primaryText}>حفظ الاسم</Text></TouchableOpacity><TouchableOpacity style={styles.secondary} onPress={signOut}><Text style={styles.secondaryText}>تسجيل الخروج</Text></TouchableOpacity></View></ScrollView>
     : <ScrollView contentContainerStyle={styles.content}><View style={styles.hero}><Text style={styles.heroTitle}>أشخاص قريبون منك</Text><Text style={styles.heroText}>موقعك لا يظهر للآخرين؛ نعرض المسافة التقريبية فقط.</Text><View style={styles.rangeRow}><View style={styles.rangeHeader}><Text style={styles.label}>نطاق البحث</Text><Text style={styles.radiusValue}>{radius} كم</Text></View><RadiusSlider value={radius} onValueChange={setRadius} /></View><TouchableOpacity disabled={busy} style={styles.primary} onPress={findNearby}><Text style={styles.primaryText}>{busy ? 'جارٍ البحث...' : 'ابحث عن القريبين'}</Text></TouchableOpacity></View>
-      <View style={styles.mapPanel}><View style={styles.mapHeading}><Text style={styles.sectionTitle}>الخريطة التفاعلية</Text><Text style={styles.small}>الدبابيس تقريبية لحماية خصوصية الجميع</Text></View><NearbyMap currentLocation={myLocation} people={people} radiusKm={radius} /></View>
+      <View style={styles.mapPanel}><View style={styles.mapHeading}><Text style={styles.sectionTitle}>الخريطة التفاعلية</Text><Text style={styles.small}>الدبابيس تقريبية لحماية خصوصية الجميع</Text></View><NearbyMap currentLocation={myLocation} people={people} radiusKm={radius} onOpenPerson={person => openChat(person)} /></View>
       <View style={styles.presence}><View style={{flex:1}}><Text style={styles.presenceTitle}>{visible ? 'أنت ظاهر الآن' : 'أنت غير ظاهر'}</Text><Text style={styles.small}>{visible ? 'يمكن للأشخاص القريبين العثور عليك.' : 'فعّل الظهور حتى يراك الآخرون.'}</Text></View><TouchableOpacity style={[styles.toggle, visible && styles.toggleOn]} onPress={() => savePresence(!visible)}><Text style={styles.toggleText}>{visible ? 'إيقاف' : 'ظهور'}</Text></TouchableOpacity></View>
       <Text style={styles.sectionTitle}>الأشخاص المتاحون ({people.length})</Text>{people.length === 0 ? <View style={styles.empty}><Text style={styles.emptyIcon}>⌖</Text><Text style={styles.emptyTitle}>لا توجد نتائج حتى الآن</Text><Text style={styles.small}>اضغط «ابحث عن القريبين» بعد السماح بالموقع.</Text></View> : <FlatList scrollEnabled={false} data={people} keyExtractor={item => item.user_id} renderItem={({item}) => <View style={styles.person}><View style={styles.personAvatar}><Text style={styles.personInitial}>{(item.display_name || '?').slice(0,1)}</Text></View><View style={{flex:1}}><Text style={styles.personName}>{item.display_name}</Text><Text style={styles.small}>{item.distance_m < 1000 ? 'على بُعد ' + item.distance_m + ' متر' : 'على بُعد ' + (item.distance_m/1000).toFixed(1) + ' كم'}</Text><TouchableOpacity onPress={() => openChat(item)} style={styles.chatButton}><Text style={styles.chatButtonText}>دردشة</Text></TouchableOpacity></View><Text style={styles.online}>●</Text></View>} />}
     </ScrollView>}
