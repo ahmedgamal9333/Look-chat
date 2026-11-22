@@ -40,8 +40,10 @@ export default function App() {
 
   async function loadProfile() {
     if (!supabase || !session?.user) return;
-    const { data } = await supabase.from('profiles').select('display_name,is_visible').eq('id', session.user.id).maybeSingle();
-    if (data) { setDisplayName(data.display_name || ''); setVisible(!!data.is_visible); }
+    const { data: profile } = await supabase.from('profiles').select('display_name').eq('id', session.user.id).maybeSingle();
+    const { data: presence } = await supabase.from('location_presence').select('is_visible').eq('user_id', session.user.id).maybeSingle();
+    setDisplayName(profile?.display_name || '');
+    setVisible(!!presence?.is_visible);
   }
 
   async function authenticate(createAccount) {
@@ -76,17 +78,17 @@ export default function App() {
     setBusy(false);
     if (profileError) return Alert.alert('تعذر حفظ الاسم', profileError.message);
     setVisible(nextVisible);
-    if (nextVisible) findNearby();
+    if (nextVisible) findNearby(nextVisible);
     else setPeople([]);
   }
 
-  async function findNearby() {
+  async function findNearby(visibility = visible) {
     if (!supabase || !session) return;
     setBusy(true);
     const permission = await Location.requestForegroundPermissionsAsync();
     if (permission.status !== 'granted') { setBusy(false); return Alert.alert('الموقع مطلوب', 'اسمح بالموقع للبحث عن الأشخاص القريبين.'); }
     const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    const { error: presenceError } = await supabase.rpc('set_my_presence', { lat: position.coords.latitude, lon: position.coords.longitude, visible });
+    const { error: presenceError } = await supabase.rpc('set_my_presence', { lat: position.coords.latitude, lon: position.coords.longitude, visible: visibility });
     if (presenceError) { setBusy(false); return Alert.alert('تعذر تحديث موقعك', presenceError.message); }
     const { data, error } = await supabase.rpc('nearby_people', { radius_m: radius * 1000 });
     setBusy(false);
