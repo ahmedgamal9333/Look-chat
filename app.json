@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "LookChat",
+    "slug": "lookchat",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "lookchat",
+    "android": {
+      "package": "com.lookchat.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.lookchat.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "يستخدم LookChat موقعك لعرض الأشخاص القريبين منك بعد موافقتك."
+      }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "يسمح LookChat باستخدام موقعك لعرض الأشخاص القريبين منك."
+        }
+      ]
+    ],
+    "extra": {}
+  }
+}
