@@ -68,7 +68,7 @@ export default function App() {
     }
     const { error: presenceError } = await supabase.rpc('set_my_presence', { lat, lon, visible: nextVisible });
     if (presenceError) { setBusy(false); return Alert.alert('تعذر حفظ حالة الظهور', presenceError.message); }
-    const { error: profileError } = await supabase.from('profiles').update({ display_name: displayName.trim() }).eq('id', session.user.id);
+    const { error: profileError } = await supabase.from('profiles').upsert({ id: session.user.id, display_name: displayName.trim() }, { onConflict: 'id' });
     setBusy(false);
     if (profileError) return Alert.alert('تعذر حفظ الاسم', profileError.message);
     setVisible(nextVisible);
