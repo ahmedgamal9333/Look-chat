@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import 'react-native-url-polyfill/auto';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+const SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_i-rHjp3ZJ9iQqI-ZI39lVA_4U-4ahBn';
 const supabase = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { storage: AsyncStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false }
 }) : null;
@@ -66,11 +66,11 @@ export default function App() {
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       lat = position.coords.latitude; lon = position.coords.longitude;
     }
-    const { error } = await supabase.rpc('set_my_presence', {
-      p_display_name: displayName.trim(), p_is_visible: nextVisible, p_latitude: lat, p_longitude: lon
-    });
+    const { error: presenceError } = await supabase.rpc('set_my_presence', { lat, lon, visible: nextVisible });
+    if (presenceError) { setBusy(false); return Alert.alert('تعذر حفظ حالة الظهور', presenceError.message); }
+    const { error: profileError } = await supabase.from('profiles').update({ display_name: displayName.trim() }).eq('id', session.user.id);
     setBusy(false);
-    if (error) return Alert.alert('تعذر حفظ الحالة', error.message);
+    if (profileError) return Alert.alert('تعذر حفظ الاسم', profileError.message);
     setVisible(nextVisible);
     if (nextVisible) findNearby();
     else setPeople([]);
@@ -82,9 +82,9 @@ export default function App() {
     const permission = await Location.requestForegroundPermissionsAsync();
     if (permission.status !== 'granted') { setBusy(false); return Alert.alert('الموقع مطلوب', 'اسمح بالموقع للبحث عن الأشخاص القريبين.'); }
     const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    const { data, error } = await supabase.rpc('nearby_people', {
-      p_latitude: position.coords.latitude, p_longitude: position.coords.longitude, p_radius_m: radius * 1000
-    });
+    const { error: presenceError } = await supabase.rpc('set_my_presence', { lat: position.coords.latitude, lon: position.coords.longitude, visible });
+    if (presenceError) { setBusy(false); return Alert.alert('تعذر تحديث موقعك', presenceError.message); }
+    const { data, error } = await supabase.rpc('nearby_people', { radius_m: radius * 1000 });
     setBusy(false);
     if (error) return Alert.alert('تعذر تحميل الأشخاص', error.message);
     setPeople(data || []);
