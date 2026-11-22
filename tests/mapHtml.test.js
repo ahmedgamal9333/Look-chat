@@ -30,7 +30,7 @@ test('map photo pins include avatar and chat action safely', () => {
     people: [{ user_id: 'user-123', display_name: 'صديق', avatar_url: 'https://example.com/photo.jpg', bio: 'أحب السفر', distance_m: 700, map_lat: 30.01, map_lon: 31.01 }]
   });
   assert.match(html, /user-pin/);
-  assert.match(html, /example\\.com\\/photo\\.jpg/);
+  assert.ok(html.includes('https://example.com/photo.jpg'));
   assert.match(html, /data-open-user/);
   assert.match(html, /ابدأ محادثة/);
 });
