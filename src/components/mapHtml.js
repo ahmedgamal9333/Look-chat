@@ -21,7 +21,7 @@ const safeImage=value=>(value.startsWith('https://')||value.startsWith('http://'
 const fallback=[26.8206,30.8025];const center=data.currentLocation?[data.currentLocation.latitude,data.currentLocation.longitude]:fallback;
 const map=L.map('map',{zoomControl:true,scrollWheelZoom:true}).setView(center,data.currentLocation?12:5);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OpenStreetMap © CARTO'}).addTo(map);
-const note=document.createElement('div');note.className='map-note';note.textContent='● نشطون مؤخرًا  ·  المواقع تقريبية';document.body.appendChild(note);
+const note=document.createElement('div');note.className='map-note';note.textContent='● متصلون الآن  ·  المواقع تقريبية';document.body.appendChild(note);
 if(data.currentLocation){
  L.marker(center,{icon:L.divIcon({className:'',html:'<div class="me-pin"></div>',iconSize:[24,24],iconAnchor:[12,12]})}).addTo(map).bindPopup('موقعك الحالي (ظاهر لك فقط)');
  const circle=L.circle(center,{radius:data.radiusKm*1000,color:'#087f72',weight:2,fillColor:'#20a58d',fillOpacity:.06}).addTo(map);
@@ -31,7 +31,7 @@ if(data.currentLocation){
   const name=escapeHtml(person.name),bio=escapeHtml(person.bio),image=safeImage(person.avatarUrl);
   const photo=image?'<img src="'+image+'" alt="" referrerpolicy="no-referrer">':'<span class="fallback">'+escapeHtml((person.name||'L').slice(0,1))+'</span>';
   const icon=L.divIcon({className:'',html:'<div class="user-pin">'+photo+'<i class="live"></i></div>',iconSize:[48,58],iconAnchor:[24,54]});
-  const popup='<div class="person-card">'+(image?'<img src="'+image+'" alt="">':'<span class="fallback">'+escapeHtml((person.name||'L').slice(0,1))+'</span>')+'<div><div class="person-name">'+name+'</div><div class="person-distance">● نشط مؤخرًا · '+distance+'</div></div></div>'+(bio?'<div class="person-bio">'+bio+'</div>':'')+'<button class="chat-action" data-open-user="'+escapeHtml(person.userId)+'">ابدأ محادثة</button>';
+  const popup='<div class="person-card">'+(image?'<img src="'+image+'" alt="">':'<span class="fallback">'+escapeHtml((person.name||'L').slice(0,1))+'</span>')+'<div><div class="person-name">'+name+'</div><div class="person-distance">● متصل الآن · '+distance+'</div></div></div>'+(bio?'<div class="person-bio">'+bio+'</div>':'')+'<button class="chat-action" data-open-user="'+escapeHtml(person.userId)+'">ابدأ محادثة</button>';
   L.marker(point,{icon}).addTo(map).bindPopup(popup);
   bounds.extend(point);
  });
