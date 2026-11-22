@@ -143,17 +143,22 @@ export default function App() {
     if (!['image/jpeg','image/png','image/webp'].includes(mimeType)) return showAlert('صيغة غير مدعومة', 'اختر صورة JPG أو PNG أو WEBP.');
     if (fileSize > 3 * 1024 * 1024) return showAlert('الصورة كبيرة', 'اختر صورة حجمها 3 ميجابايت أو أقل.');
     setBusy(true);
-    const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-    const path = session.user.id + '/' + Date.now() + '.' + extension;
-    const uploadBody = Platform.OS === 'web' ? file : await (await fetch(file.uri)).arrayBuffer();
-    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, uploadBody, { contentType: mimeType, upsert: true });
-    if (uploadError) { setBusy(false); return showAlert('تعذر رفع الصورة', uploadError.message); }
-    const { data } = supabase.storage.from('avatars').getPublicUrl(path);
-    const { error: profileError } = await supabase.from('profiles').upsert({ id: session.user.id, display_name: displayName.trim() || 'مستخدم LookChat', bio: profileBio.trim(), avatar_url: data.publicUrl, updated_at: new Date().toISOString() }, { onConflict: 'id' });
-    setBusy(false);
-    if (profileError) return showAlert('تعذر حفظ الصورة بالحساب', profileError.message);
-    setAvatarUrl(data.publicUrl);
-    showAlert('تم تحديث الصورة', 'صورتك الشخصية أصبحت محدثة.');
+    try {
+      const extension = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+      const path = session.user.id + '/' + Date.now() + '.' + extension;
+      const uploadBody = Platform.OS === 'web' ? file : await (await fetch(file.uri)).arrayBuffer();
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(path, uploadBody, { contentType: mimeType, upsert: true });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+      const { error: profileError } = await supabase.from('profiles').upsert({ id: session.user.id, display_name: displayName.trim() || 'مستخدم LookChat', bio: profileBio.trim(), avatar_url: data.publicUrl, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+      if (profileError) throw profileError;
+      setAvatarUrl(data.publicUrl);
+      showAlert('تم تحديث الصورة', 'صورتك الشخصية أصبحت محدثة.');
+    } catch (error) {
+      showAlert('تعذر رفع الصورة', error?.message || 'حاول مرة أخرى.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function openChat(person) {
